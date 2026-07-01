@@ -1,0 +1,7 @@
+bin
+.git
+.tmp
+.cursor
+.idea
+.vscode
+*.md
