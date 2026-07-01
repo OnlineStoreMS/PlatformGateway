@@ -34,10 +34,20 @@ func Setup(cfg *config.Config) *gin.Engine {
 		})
 	})
 
-	v1 := r.Group("/api/v1")
-	v1.Any("/admin/*path", pimAuth(cfg, validator), reverseProxy(pimBase))
-	v1.POST("/auth/login", reverseProxy(iamBase))
-	v1.Any("/*path", reverseProxy(iamBase))
+	pimProxy := reverseProxy(pimBase)
+	iamProxy := reverseProxy(iamBase)
+
+	// Gin 同一层级只能有一个 catch-all；admin 走 PIM，其余 /api/v1/* 走 IAM（NoRoute）
+	r.Any("/api/v1/admin/*path", pimAuth(cfg, validator), pimProxy)
+	r.Any("/api/v1/auth/login", iamProxy)
+
+	r.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/api/v1/") {
+			iamProxy(c)
+			return
+		}
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "not found"})
+	})
 
 	return r
 }
@@ -45,7 +55,7 @@ func Setup(cfg *config.Config) *gin.Engine {
 func cors(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-	 if cfg.CORS.Allows(origin) && origin != "" {
+		if cfg.CORS.Allows(origin) && origin != "" {
 			c.Header("Access-Control-Allow-Origin", origin)
 		}
 		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
