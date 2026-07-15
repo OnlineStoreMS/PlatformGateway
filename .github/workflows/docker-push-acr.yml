@@ -19,15 +19,22 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      full_sha: ${{ steps.meta.outputs.full_sha }}
     steps:
       - id: meta
         run: |
+          SHORT="${GITHUB_SHA::7}"
           if [ -n "${{ inputs.image_tag }}" ]; then
             TAG="${{ inputs.image_tag }}"
           else
-            TAG="sha-${GITHUB_SHA::7}"
+            TAG="sha-${SHORT}"
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$TAG"
+            echo "short_sha=$SHORT"
+            echo "full_sha=$GITHUB_SHA"
+          } >> "$GITHUB_OUTPUT"
 
   build-push:
     needs: prepare
@@ -49,7 +56,17 @@ jobs:
           push: true
           tags: |
             ${{ secrets.ALIYUN_ACR_REGISTRY }}/${{ secrets.ALIYUN_ACR_NAMESPACE }}/platformgateway-api:${{ needs.prepare.outputs.tag }}
+            ${{ secrets.ALIYUN_ACR_REGISTRY }}/${{ secrets.ALIYUN_ACR_NAMESPACE }}/platformgateway-api:sha-${{ needs.prepare.outputs.short_sha }}
             ${{ secrets.ALIYUN_ACR_REGISTRY }}/${{ secrets.ALIYUN_ACR_NAMESPACE }}/platformgateway-api:latest
+          labels: |
+            org.opencontainers.image.title=platformgateway-api
+            org.opencontainers.image.version=${{ needs.prepare.outputs.tag }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            com.osms.git.sha=${{ github.sha }}
+            com.osms.git.short_sha=${{ needs.prepare.outputs.short_sha }}
+            com.osms.image.tag=${{ needs.prepare.outputs.tag }}
           cache-from: type=gha,scope=platformgateway-api
           cache-to: type=gha,mode=max,scope=platformgateway-api
 
@@ -61,9 +78,17 @@ jobs:
       - run: |
           REG="${{ secrets.ALIYUN_ACR_REGISTRY }}/${{ secrets.ALIYUN_ACR_NAMESPACE }}"
           TAG="${{ needs.prepare.outputs.tag }}"
+          SHORT="${{ needs.prepare.outputs.short_sha }}"
+          FULL="${{ needs.prepare.outputs.full_sha }}"
           {
             echo "## PlatformGateway 镜像已推送"
             echo ""
-            echo "- 标签: \`$TAG\` 与 \`latest\`"
-            echo "- 镜像: \`$REG/platformgateway-api\`"
+            echo "- 标签: \`$TAG\` / \`sha-$SHORT\` / \`latest\`"
+            echo "- Git SHA: \`$FULL\`"
+            echo "- 前缀: \`$REG/\`"
+            echo ""
+            echo "查询运行中镜像提交:"
+            echo "\`\`\`bash"
+            echo "docker inspect --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}' <image>"
+            echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
