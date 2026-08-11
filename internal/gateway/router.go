@@ -79,11 +79,20 @@ func pimAuth(cfg *config.Config, v *jwt.Validator) gin.HandlerFunc {
 			return
 		}
 		auth := c.GetHeader("Authorization")
-		if !strings.HasPrefix(auth, "Bearer ") {
+		token := ""
+		if strings.HasPrefix(auth, "Bearer ") {
+			token = strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+		}
+		if token == "" {
+			if ck, err := c.Request.Cookie("uc_access"); err == nil && ck != nil {
+				token = strings.TrimSpace(ck.Value)
+			}
+		}
+		if token == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "请先登录"})
 			return
 		}
-		claims, err := v.Parse(strings.TrimPrefix(auth, "Bearer "))
+		claims, err := v.Parse(token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "登录已过期"})
 			return
