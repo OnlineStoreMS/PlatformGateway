@@ -51,6 +51,9 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
+          # 阿里云 ACR 不支持 Buildx 默认 OCI attestation（empty.v1+json）
+          provenance: false
+          sbom: false
           context: .
           file: docker/Dockerfile.api
           push: true
